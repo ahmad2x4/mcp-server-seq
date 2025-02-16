@@ -1,5 +1,7 @@
 # Seq MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@ahmad2x4/mcp-server-seq)](https://smithery.ai/server/@ahmad2x4/mcp-server-seq)
+
 MCP Server for Seq's API endpoints for interacting with your logging and monitoring system. This server provides comprehensive access to Seq's API features through the Model Context Protocol.
 
 ## Features
@@ -97,6 +99,16 @@ The `get-events` tool supports the following time range options:
 - `30d` - Last 30 days
 
 ## Installation
+
+### Installing via Smithery
+
+To install Seq MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@ahmad2x4/mcp-server-seq):
+
+```bash
+npx -y @smithery/cli install @ahmad2x4/mcp-server-seq --client claude
+```
+
+### Installing via Smithery
 
 To use with Claude Desktop, add the server config:
 
