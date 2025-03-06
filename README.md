@@ -42,16 +42,20 @@ The server requires the following environment variables:
 - `SEQ_BASE_URL` (optional): Your Seq server URL (defaults to 'http://localhost:8080')
 - `SEQ_API_KEY` (required): Your Seq API key
 
-## Usage with Claude Desktop
+## Installation
 
-Add to your `claude_desktop_config.json`:
+
+To use with Claude Desktop, add the server config:
+
+On MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "seq": {
-      "command": "npx",
-      "args": ["-y", "mcp-seq"],
+      "command":"npx",
+      "args": ["mcp-seq"],
       "env": {
         "SEQ_BASE_URL": "your-seq-url",
         "SEQ_API_KEY": "your-api-key"
@@ -98,29 +102,6 @@ The `get-events` tool supports the following time range options:
 - `14d` - Last 14 days
 - `30d` - Last 30 days
 
-## Installation
-
-This tool is still in development and we havn't pushed to the npm repository. You need to clone this repository on your local then build `npm run build`
-
-To use with Claude Desktop, add the server config:
-
-On MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "seq": {
-      "command":"node",
-      "args": ["/Users/ahmadreza/source/ahmad2x4/mcp-server-seq/build/seq-server.js"],
-      "env": {
-        "SEQ_BASE_URL": "your-seq-url",
-        "SEQ_API_KEY": "your-api-key"
-      }
-    }
-  }
-}
-```
 
 ### Debugging
 
