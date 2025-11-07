@@ -1,13 +1,21 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
+import express from "express";
+import cors from "cors";
 import 'dotenv/config';
 
 // Configuration and constants
 const SEQ_BASE_URL = process.env.SEQ_BASE_URL || 'http://localhost:8080';
 const SEQ_API_KEY = process.env.SEQ_API_KEY || '';
 const MAX_EVENTS = 100;
+
+// Transport configuration
+const TRANSPORT_TYPE = process.env.TRANSPORT_TYPE || 'stdio'; // 'stdio' or 'sse'
+const SSE_PORT = parseInt(process.env.SSE_PORT || '3000');
+const SSE_HOST = process.env.SSE_HOST || 'localhost';
 
 // Types for SEQ API responses
 interface Signal {
@@ -225,22 +233,74 @@ server.tool(
   }
 );
 
-// Start the server with stdio transport
+// Start the server with the configured transport
 async function runServer() {
+  if (TRANSPORT_TYPE === 'sse') {
+    await runSseServer();
+  } else {
+    await runStdioServer();
+  }
+}
+
+// Run server with STDIO transport
+async function runStdioServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  
+  // Handle stdin close gracefully
+  process.stdin.on("close", () => {
+    console.error("Seq MCP Server (STDIO) closed");
+    server.close();
+  });
+}
+
+// Run server with SSE transport
+async function runSseServer() {
+  const app = express();
+  app.use(cors());
+
+  let transport: SSEServerTransport | null = null;
+
+  // SSE endpoint for MCP
+  app.get('/mcp', async (req, res) => {
+    transport = new SSEServerTransport('/mcp', res);
+    await server.connect(transport);
+  });
+
+  // POST endpoint for messages
+  app.post('/mcp', async (req, res) => {
+    if (transport) {
+      transport.handlePostMessage(req, res);
+    } else {
+      res.status(400).json({ error: 'No active SSE connection' });
+    }
+  });
+
+  const serverInstance = app.listen(SSE_PORT, SSE_HOST, () => {
+    console.log(`Seq MCP Server (SSE) running on http://${SSE_HOST}:${SSE_PORT}/mcp`);
+  });
+
+  process.on('SIGINT', () => {
+    console.error("Seq MCP Server (SSE) shutting down...");
+    serverInstance.close(() => {
+      server.close();
+      process.exit(0);
+    });
+  });
+
+  process.on('SIGTERM', () => {
+    console.error("Seq MCP Server (SSE) shutting down...");
+    serverInstance.close(() => {
+      server.close();
+      process.exit(0);
+    });
+  });
 }
 
 // Always run the server when this file is executed directly
 runServer().catch(error => {
   console.error('Failed to start server:', error);
   process.exit(1);
-});
-
-// Handle stdin close gracefully
-process.stdin.on("close", () => {
-  console.error("Seq MCP Server closed");
-  server.close();
 });
 
 export default server;
