@@ -7,7 +7,7 @@ import 'dotenv/config';
 // Configuration and constants
 const SEQ_BASE_URL = process.env.SEQ_BASE_URL || 'http://localhost:8080';
 const SEQ_API_KEY = process.env.SEQ_API_KEY || '';
-const MAX_EVENTS = 100;
+const MAX_EVENTS = 20;
 
 // Types for SEQ API responses
 interface Signal {
@@ -181,7 +181,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: JSON.stringify(events, null, 2)
+          text: JSON.stringify(events)
         }]
       };
     } catch (error) {
