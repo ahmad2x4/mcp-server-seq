@@ -7,34 +7,48 @@ import 'dotenv/config';
 // Configuration and constants
 const SEQ_BASE_URL = process.env.SEQ_BASE_URL || 'http://localhost:8080';
 const SEQ_API_KEY = process.env.SEQ_API_KEY || '';
-const MAX_EVENTS = 20;
+const MAX_EVENTS = 50;
+const CHARACTER_LIMIT = 25_000;
 
-// Types for SEQ API responses
-interface Signal {
-  id: string;
-  title: string;
-  description?: string;
-  filters: unknown;
-  ownerId?: string;
-  shared: boolean;
+if (!SEQ_API_KEY) {
+  console.error('Warning: SEQ_API_KEY is not set. Some Seq instances require authentication.');
 }
 
-type Event = any;
+// Types for Seq API responses
+interface Signal {
+  Id: string;
+  Title: string;
+  Description?: string;
+  Filters: unknown[];
+  OwnerId?: string;
+  IsShared: boolean;
+}
+
+interface SeqEvent {
+  Id: string;
+  Timestamp: string;
+  Level: string;
+  MessageTemplateTokens?: unknown[];
+  RenderedMessage?: string;
+  Properties?: Record<string, unknown>;
+  Exception?: string;
+  [key: string]: unknown;
+}
 
 // Create the MCP server
 const server = new McpServer({
-  name: "seq-server",
+  name: "seq-mcp-server",
   version: "1.0.0"
 });
 
-// Helper function for SEQ API requests
+// Helper function for Seq API requests
 async function makeSeqRequest<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(`${SEQ_BASE_URL}${endpoint}`);
-  
-  // Add API key as query parameter
-  url.searchParams.append('apiKey', SEQ_API_KEY);
-  
-  // Add additional query parameters
+
+  if (SEQ_API_KEY) {
+    url.searchParams.append('apiKey', SEQ_API_KEY);
+  }
+
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
       url.searchParams.append(key, value);
@@ -43,13 +57,18 @@ async function makeSeqRequest<T>(endpoint: string, params: Record<string, string
 
   const headers: Record<string, string> = {
     'Accept': 'application/json',
-    'X-Seq-ApiKey': SEQ_API_KEY
   };
+
+  if (SEQ_API_KEY) {
+    headers['X-Seq-ApiKey'] = SEQ_API_KEY;
+  }
 
   const response = await fetch(url.toString(), { headers });
 
   if (!response.ok) {
-    throw new Error(`SEQ API error: ${response.statusText} (${response.status})`);
+    let body = '';
+    try { body = await response.text(); } catch { /* ignore */ }
+    throw new Error(`Seq API error ${response.status} (${response.statusText})${body ? `: ${body}` : ''}`);
   }
 
   return response.json();
@@ -60,17 +79,17 @@ server.resource(
   "signals",
   "seq://signals",
   {
-    description: "List of saved Seq signals that can be used with the get-events tool to filter log events"
+    description: "List of saved Seq signals that can be used with seq_get_events to filter log events by category or service"
   },
   async () => {
     try {
       const signals = await makeSeqRequest<Signal[]>('/api/signals', { shared: 'true' });
       const formattedSignals = signals.map(signal => ({
-        id: signal.id,
-        title: signal.title,
-        description: signal.description || 'No description provided',
-        shared: signal.shared,
-        ownerId: signal.ownerId
+        id: signal.Id,
+        title: signal.Title,
+        description: signal.Description || 'No description provided',
+        shared: signal.IsShared,
+        ownerId: signal.OwnerId
       }));
 
       return {
@@ -86,32 +105,66 @@ server.resource(
   }
 );
 
-// Tool for fetching signals with filters
+// Schema for time range validation
+const timeRangeSchema = z.enum(['1m', '15m', '30m', '1h', '2h', '6h', '12h', '1d', '7d', '14d', '30d']);
+
+const signalsSchema = z.object({
+  ownerId: z.string().optional()
+    .describe('Filter signals by owner ID'),
+  shared: z.boolean().optional()
+    .describe('Filter by shared status. Defaults to true (shared signals only)'),
+  partial: z.boolean().optional()
+    .describe('Include partial signal matches')
+}).strict();
+
+const eventsSchema = z.object({
+  signal: z.string().optional()
+    .describe('Comma-separated signal IDs to scope results (get IDs from seq_get_signals)'),
+  filter: z.string().optional()
+    .describe("Seq filter expression, e.g. \"@Level = 'Error'\" or \"StatusCode >= 500\""),
+  count: z.number().min(1).max(MAX_EVENTS).optional()
+    .default(20)
+    .describe(`Number of events to return (1–${MAX_EVENTS}, default 20)`),
+  fromDateUtc: z.string().optional()
+    .describe('Start of time range in UTC ISO 8601, e.g. "2024-01-15T10:00:00Z"'),
+  toDateUtc: z.string().optional()
+    .describe('End of time range in UTC ISO 8601, e.g. "2024-01-15T11:00:00Z"'),
+  range: timeRangeSchema.optional()
+    .describe('Relative time range; takes precedence over fromDateUtc/toDateUtc. Options: 1m, 15m, 30m, 1h, 2h, 6h, 12h, 1d, 7d, 14d, 30d'),
+  after: z.string().optional()
+    .describe('Pagination cursor: pass the last event ID from a previous response to fetch the next page'),
+  render: z.boolean().optional()
+    .default(false)
+    .describe('Render message templates into human-readable strings (adds RenderedMessage to each event)')
+}).strict();
+
+// Tool: List signals
 server.tool(
-  "get-signals",
-  {
-    ownerId: z.string().optional()
-      .describe('Owner ID to filter signals by'),
-    shared: z.boolean().optional()
-      .describe('Whether to include only shared signals (true) or private signals (false)'),
-    partial: z.boolean().optional()
-      .describe('Whether to include partial signal matches')
-  },
+  "seq_get_signals",
+  "List saved Seq signals (named filters). Use signal IDs with seq_get_events to narrow results to a specific service or category.",
+  signalsSchema.shape,
   async ({ ownerId, shared, partial }) => {
     try {
       const params: Record<string, string> = {
-        // Default to shared=true if no other params provided
         shared: shared?.toString() ?? "true"
       };
       if (ownerId) params.ownerId = ownerId;
       if (partial !== undefined) params.partial = partial.toString();
 
       const signals = await makeSeqRequest<Signal[]>('/api/signals', params);
-      
+      const normalized = signals.map(s => ({
+        id: s.Id,
+        title: s.Title,
+        description: s.Description,
+        shared: s.IsShared,
+        ownerId: s.OwnerId,
+        filters: s.Filters
+      }));
+
       return {
         content: [{
           type: "text",
-          text: JSON.stringify(signals, null, 2)
+          text: JSON.stringify(normalized, null, 2)
         }]
       };
     } catch (error) {
@@ -119,7 +172,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `Error fetching signals: ${err.message}`
+          text: `Error fetching signals: ${err.message}. Verify SEQ_BASE_URL (${SEQ_BASE_URL}) is correct and the server is reachable.`
         }],
         isError: true
       };
@@ -127,61 +180,57 @@ server.tool(
   }
 );
 
-// Schema for time range validation
-const timeRangeSchema = z.enum(['1m', '15m', '30m', '1h', '2h', '6h', '12h', '1d', '7d', '14d', '30d']);
-
-// Tool for fetching events with enhanced parameters
+// Tool: Get events
 server.tool(
-  "get-events",
-  `Retrieve and analyze a list of event filtered by parameters. Use this tool when you need to:
-  - Investigate events that are being logged in the SEQ server
-  - Details of each event is a structured log and can provide usefull information
-  - Events could be information, error, debug, or critical
-  - Analyze error patterns and frequencies  
-  `,
-  {
-    signal: z.string().optional()
-      .describe('Comma-separated list of signal IDs'),
-    filter: z.string().optional()
-      .describe('Filter expression for events'),
-    count: z.number().min(1).max(MAX_EVENTS).optional()
-      .default(MAX_EVENTS)
-      .describe(`Number of events to return (max ${MAX_EVENTS})`),
-    fromDateUtc: z.string().optional()
-      .describe('Start date/time in UTC'),
-    toDateUtc: z.string().optional()
-      .describe('End date/time in UTC'),
-    range: timeRangeSchema.optional()
-      .describe('Time range (e.g., 1m, 15m, 1h, 1d, 7d)')
-  },
-  async ({ signal, filter, count, fromDateUtc, toDateUtc, range }) => {
+  "seq_get_events",
+  `Retrieve structured log events from Seq. Use to investigate errors, analyze patterns, or monitor application health.
+
+Tips:
+- Call seq_get_signals first to find signal IDs for targeted filtering
+- Start with a broad time range, then narrow using filter expressions
+- Filter expressions use Seq query syntax, e.g.: @Level = 'Error', StatusCode >= 500, RequestPath like '/api/%'
+- Combine signal + filter for precise results
+- Use render=true to get human-readable rendered messages instead of raw message templates
+- Use the 'after' parameter with the last event ID to page through large result sets`,
+  eventsSchema.shape,
+  async ({ signal, filter, count, fromDateUtc, toDateUtc, range, after, render }) => {
     try {
       const params: Record<string, string> = {};
-      
-      // Handle date range parameters
+
       if (range) {
-        // If range is provided, it takes precedence over fromDateUtc/toDateUtc
         params.range = range;
       } else if (fromDateUtc || toDateUtc) {
-        // Only add date parameters if they're provided
         if (fromDateUtc) params.fromDateUtc = fromDateUtc;
         if (toDateUtc) params.toDateUtc = toDateUtc;
       } else {
-        // Default to last hour if no time parameters provided
         params.range = '1h';
       }
 
-      // Add other optional parameters
       if (signal) params.signal = signal;
       if (filter) params.filter = filter;
       if (count) params.count = count.toString();
+      if (after) params.after = after;
+      if (render) params.render = 'true';
 
-      const events = await makeSeqRequest<Event[]>('/api/events', params);
-      
+      const events = await makeSeqRequest<SeqEvent[]>('/api/events', params);
+
+      let text = JSON.stringify(events, null, 2);
+      let truncated = false;
+      while (text.length > CHARACTER_LIMIT && events.length > 1) {
+        events.splice(Math.ceil(events.length / 2));
+        text = JSON.stringify(events, null, 2);
+        truncated = true;
+      }
+
+      if (truncated) {
+        const meta = { truncated: true, returned: events.length, truncation_message: `Response exceeded ${CHARACTER_LIMIT} characters. Reduce 'count', narrow the time 'range', or add a 'filter' expression to get more targeted results.` };
+        text = JSON.stringify({ ...meta, events }, null, 2);
+      }
+
       return {
         content: [{
           type: "text",
-          text: JSON.stringify(events)
+          text
         }]
       };
     } catch (error) {
@@ -189,7 +238,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `Error fetching events: ${err.message}`
+          text: `Error fetching events: ${err.message}. Check that filter syntax is valid Seq query syntax and that any signal IDs exist (use seq_get_signals to list them).`
         }],
         isError: true
       };
@@ -197,15 +246,15 @@ server.tool(
   }
 );
 
-
-// Tool for fetching alert state
+// Tool: Get alert state
 server.tool(
-  "get-alertstate",
+  "seq_get_alert_state",
+  "Get the current state of all Seq alerts. Returns firing, ok, or suppressed status for each configured alert.",
   {},
   async () => {
     try {
-      const alertState = await makeSeqRequest<any>('/api/alertstate');
-      
+      const alertState = await makeSeqRequest<Record<string, unknown>>('/api/alertstate');
+
       return {
         content: [{
           type: "text",
@@ -217,7 +266,7 @@ server.tool(
       return {
         content: [{
           type: "text",
-          text: `Error fetching alert state: ${err.message}`
+          text: `Error fetching alert state: ${err.message}. Verify the Seq server is reachable at ${SEQ_BASE_URL}.`
         }],
         isError: true
       };
@@ -231,13 +280,11 @@ async function runServer() {
   await server.connect(transport);
 }
 
-// Always run the server when this file is executed directly
 runServer().catch(error => {
   console.error('Failed to start server:', error);
   process.exit(1);
 });
 
-// Handle stdin close gracefully
 process.stdin.on("close", () => {
   console.error("Seq MCP Server closed");
   server.close();
