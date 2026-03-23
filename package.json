@@ -1,6 +1,6 @@
 {
   "name": "mcp-seq",
-  "version": "0.3.3",
+  "version": "1.0.0",
   "description": "MCP Server for Seq's API endpoints",
   "type": "module",
   "main": "build/seq-server.js",
