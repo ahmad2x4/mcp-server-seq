@@ -25,6 +25,9 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
       
+      - name: Clear npm auth token for trusted publishing
+        run: npm config delete //registry.npmjs.org/:_authToken
+
       - name: Configure Git
         run: |
           git config --global user.email "ara.mailbox@gmail.com"
