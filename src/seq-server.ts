@@ -8,6 +8,7 @@ import 'dotenv/config';
 const SEQ_BASE_URL = process.env.SEQ_BASE_URL || 'http://localhost:8080';
 const SEQ_API_KEY = process.env.SEQ_API_KEY || '';
 const MAX_EVENTS = 50;
+const CHARACTER_LIMIT = 25_000;
 
 if (!SEQ_API_KEY) {
   console.error('Warning: SEQ_API_KEY is not set. Some Seq instances require authentication.');
@@ -107,18 +108,41 @@ server.resource(
 // Schema for time range validation
 const timeRangeSchema = z.enum(['1m', '15m', '30m', '1h', '2h', '6h', '12h', '1d', '7d', '14d', '30d']);
 
+const signalsSchema = z.object({
+  ownerId: z.string().optional()
+    .describe('Filter signals by owner ID'),
+  shared: z.boolean().optional()
+    .describe('Filter by shared status. Defaults to true (shared signals only)'),
+  partial: z.boolean().optional()
+    .describe('Include partial signal matches')
+}).strict();
+
+const eventsSchema = z.object({
+  signal: z.string().optional()
+    .describe('Comma-separated signal IDs to scope results (get IDs from seq_get_signals)'),
+  filter: z.string().optional()
+    .describe("Seq filter expression, e.g. \"@Level = 'Error'\" or \"StatusCode >= 500\""),
+  count: z.number().min(1).max(MAX_EVENTS).optional()
+    .default(20)
+    .describe(`Number of events to return (1–${MAX_EVENTS}, default 20)`),
+  fromDateUtc: z.string().optional()
+    .describe('Start of time range in UTC ISO 8601, e.g. "2024-01-15T10:00:00Z"'),
+  toDateUtc: z.string().optional()
+    .describe('End of time range in UTC ISO 8601, e.g. "2024-01-15T11:00:00Z"'),
+  range: timeRangeSchema.optional()
+    .describe('Relative time range; takes precedence over fromDateUtc/toDateUtc. Options: 1m, 15m, 30m, 1h, 2h, 6h, 12h, 1d, 7d, 14d, 30d'),
+  after: z.string().optional()
+    .describe('Pagination cursor: pass the last event ID from a previous response to fetch the next page'),
+  render: z.boolean().optional()
+    .default(false)
+    .describe('Render message templates into human-readable strings (adds RenderedMessage to each event)')
+}).strict();
+
 // Tool: List signals
 server.tool(
   "seq_get_signals",
   "List saved Seq signals (named filters). Use signal IDs with seq_get_events to narrow results to a specific service or category.",
-  {
-    ownerId: z.string().optional()
-      .describe('Filter signals by owner ID'),
-    shared: z.boolean().optional()
-      .describe('Filter by shared status. Defaults to true (shared signals only)'),
-    partial: z.boolean().optional()
-      .describe('Include partial signal matches')
-  },
+  signalsSchema.shape,
   async ({ ownerId, shared, partial }) => {
     try {
       const params: Record<string, string> = {
@@ -128,11 +152,19 @@ server.tool(
       if (partial !== undefined) params.partial = partial.toString();
 
       const signals = await makeSeqRequest<Signal[]>('/api/signals', params);
+      const normalized = signals.map(s => ({
+        id: s.Id,
+        title: s.Title,
+        description: s.Description,
+        shared: s.IsShared,
+        ownerId: s.OwnerId,
+        filters: s.Filters
+      }));
 
       return {
         content: [{
           type: "text",
-          text: JSON.stringify(signals, null, 2)
+          text: JSON.stringify(normalized, null, 2)
         }]
       };
     } catch (error) {
@@ -160,26 +192,7 @@ Tips:
 - Combine signal + filter for precise results
 - Use render=true to get human-readable rendered messages instead of raw message templates
 - Use the 'after' parameter with the last event ID to page through large result sets`,
-  {
-    signal: z.string().optional()
-      .describe('Comma-separated signal IDs to scope results (get IDs from seq_get_signals)'),
-    filter: z.string().optional()
-      .describe("Seq filter expression, e.g. \"@Level = 'Error'\" or \"StatusCode >= 500\""),
-    count: z.number().min(1).max(MAX_EVENTS).optional()
-      .default(20)
-      .describe(`Number of events to return (1–${MAX_EVENTS}, default 20)`),
-    fromDateUtc: z.string().optional()
-      .describe('Start of time range in UTC ISO 8601, e.g. "2024-01-15T10:00:00Z"'),
-    toDateUtc: z.string().optional()
-      .describe('End of time range in UTC ISO 8601, e.g. "2024-01-15T11:00:00Z"'),
-    range: timeRangeSchema.optional()
-      .describe('Relative time range; takes precedence over fromDateUtc/toDateUtc. Options: 1m, 15m, 30m, 1h, 2h, 6h, 12h, 1d, 7d, 14d, 30d'),
-    after: z.string().optional()
-      .describe('Pagination cursor: pass the last event ID from a previous response to fetch the next page'),
-    render: z.boolean().optional()
-      .default(false)
-      .describe('Render message templates into human-readable strings (adds RenderedMessage to each event)')
-  },
+  eventsSchema.shape,
   async ({ signal, filter, count, fromDateUtc, toDateUtc, range, after, render }) => {
     try {
       const params: Record<string, string> = {};
@@ -201,10 +214,23 @@ Tips:
 
       const events = await makeSeqRequest<SeqEvent[]>('/api/events', params);
 
+      let text = JSON.stringify(events, null, 2);
+      let truncated = false;
+      while (text.length > CHARACTER_LIMIT && events.length > 1) {
+        events.splice(Math.ceil(events.length / 2));
+        text = JSON.stringify(events, null, 2);
+        truncated = true;
+      }
+
+      if (truncated) {
+        const meta = { truncated: true, returned: events.length, truncation_message: `Response exceeded ${CHARACTER_LIMIT} characters. Reduce 'count', narrow the time 'range', or add a 'filter' expression to get more targeted results.` };
+        text = JSON.stringify({ ...meta, events }, null, 2);
+      }
+
       return {
         content: [{
           type: "text",
-          text: JSON.stringify(events, null, 2)
+          text
         }]
       };
     } catch (error) {
