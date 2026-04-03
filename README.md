@@ -42,6 +42,30 @@ The server requires the following environment variables:
 - `SEQ_BASE_URL` (optional): Your Seq server URL (defaults to 'http://localhost:8080')
 - `SEQ_API_KEY` (required): Your Seq API key
 
+## Usage with Claude Code
+
+Run the following command to add the server:
+
+```bash
+claude mcp add --transport stdio \
+  --env SEQ_BASE_URL=http://localhost:5341 \
+  --env SEQ_API_KEY=your-api-key \
+  seq -- npx -y mcp-seq
+```
+
+To share the configuration with your team, use the `--scope project` flag (saves to `.mcp.json`):
+
+```bash
+claude mcp add --transport stdio --scope project \
+  --env SEQ_BASE_URL=http://localhost:5341 \
+  --env SEQ_API_KEY=your-api-key \
+  seq -- npx -y mcp-seq
+```
+
+> **Windows users:** Replace `npx -y mcp-seq` with `cmd /c npx -y mcp-seq` to avoid "Connection closed" errors.
+
+Verify the server is connected by running `/mcp` inside Claude Code.
+
 ## Usage with Claude Desktop
 
 Add to your `claude_desktop_config.json`:
@@ -100,27 +124,13 @@ The `get-events` tool supports the following time range options:
 
 ## Installation
 
-This tool is still in development and we havn't pushed to the npm repository. You need to clone this repository on your local then build `npm run build`
+Install globally via npm:
 
-To use with Claude Desktop, add the server config:
-
-On MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "seq": {
-      "command":"node",
-      "args": ["/Users/ahmadreza/source/ahmad2x4/mcp-server-seq/build/seq-server.js"],
-      "env": {
-        "SEQ_BASE_URL": "your-seq-url",
-        "SEQ_API_KEY": "your-api-key"
-      }
-    }
-  }
-}
+```bash
+npm install -g mcp-seq
 ```
+
+Or use directly with `npx` — no installation required (as shown in the configuration examples above).
 
 ### Debugging
 
@@ -135,5 +145,3 @@ The server implements comprehensive type safety using:
 - TypeScript for static type checking
 - Zod schema validation for runtime type checking
 - Proper error handling and response formatting
-=======
-
