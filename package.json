@@ -20,6 +20,10 @@
   ],
   "author": "Ahmad Atighechi",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ahmad2x4/mcp-server-seq.git"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.4.1",
     "dotenv": "^16.3.1",
