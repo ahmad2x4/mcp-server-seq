@@ -140,8 +140,8 @@ const eventsSchema = z.object({
 
 // Tool: List signals
 server.tool(
-  "seq_get_signals",
-  "List saved Seq signals (named filters). Use signal IDs with seq_get_events to narrow results to a specific service or category.",
+  "get_signals",
+  "List saved Seq signals (named filters). Use signal IDs with get_events to narrow results to a specific service or category.",
   signalsSchema.shape,
   async ({ ownerId, shared, partial }) => {
     try {
@@ -182,11 +182,11 @@ server.tool(
 
 // Tool: Get events
 server.tool(
-  "seq_get_events",
+  "get_events",
   `Retrieve structured log events from Seq. Use to investigate errors, analyze patterns, or monitor application health.
 
 Tips:
-- Call seq_get_signals first to find signal IDs for targeted filtering
+- Call get_signals first to find signal IDs for targeted filtering
 - Start with a broad time range, then narrow using filter expressions
 - Filter expressions use Seq query syntax, e.g.: @Level = 'Error', StatusCode >= 500, RequestPath like '/api/%'
 - Combine signal + filter for precise results
@@ -238,7 +238,7 @@ Tips:
       return {
         content: [{
           type: "text",
-          text: `Error fetching events: ${err.message}. Check that filter syntax is valid Seq query syntax and that any signal IDs exist (use seq_get_signals to list them).`
+          text: `Error fetching events: ${err.message}. Check that filter syntax is valid Seq query syntax and that any signal IDs exist (use get_signals to list them).`
         }],
         isError: true
       };
@@ -248,7 +248,7 @@ Tips:
 
 // Tool: Get alert state
 server.tool(
-  "seq_get_alert_state",
+  "get_alert_state",
   "Get the current state of all Seq alerts. Returns firing, ok, or suppressed status for each configured alert.",
   {},
   async () => {

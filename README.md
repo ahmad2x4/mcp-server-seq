@@ -9,21 +9,21 @@ MCP Server for Seq's API endpoints for interacting with your logging and monitor
 ### Tools
 
 #### Signals Management
-- `get-signals` - Fetch signals with filtering options
+- `get_signals` - Fetch signals with filtering options
   - Filter by owner ID
   - Filter shared/private signals
   - Support for partial matches
 
 #### Event Management
-- `get-events` - Retrieve events with extensive filtering options
+- `get_events` - Retrieve events with extensive filtering options
   - Filter by signal IDs
   - Custom filter expressions
-  - Configurable event count (max 100)
+  - Configurable event count (max 50)
   - Flexible time range options
   - Date range filtering
 
 #### Alert Management
-- `get-alertstate` - Retrieve the current state of alerts
+- `get_alert_state` - Retrieve the current state of alerts
 
 ### Resources
 
