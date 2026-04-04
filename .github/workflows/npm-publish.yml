@@ -24,9 +24,6 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Upgrade npm for OIDC trusted publishing
-        run: npm install -g npm@latest
-
       - name: Configure Git
         run: |
           git config --global user.email "ara.mailbox@gmail.com"
@@ -41,10 +38,10 @@ jobs:
       - name: Version and publish
         run: |
           if [[ "${{ github.event.inputs.version }}" =~ ^(patch|minor|major)$ ]]; then
-            npm version ${{ github.event.inputs.version }}
+            npx --yes npm@11 version ${{ github.event.inputs.version }}
           else
-            npm version ${{ github.event.inputs.version }} --allow-same-version
+            npx --yes npm@11 version ${{ github.event.inputs.version }} --allow-same-version
           fi
-          npm publish --provenance
+          npx --yes npm@11 publish --provenance
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
