@@ -1,10 +1,12 @@
 {
   "name": "mcp-seq",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP Server for Seq's API endpoints",
   "type": "module",
   "main": "build/seq-server.js",
-  "bin": "build/seq-server.js",
+  "bin": {
+    "mcp-seq": "build/seq-server.js"
+  },
   "scripts": {
     "build": "tsc && shx chmod +x build/*.js",
     "prepare": "npm run build",
