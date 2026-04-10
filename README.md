@@ -42,6 +42,25 @@ The server requires the following environment variables:
 - `SEQ_BASE_URL` (optional): Your Seq server URL (defaults to 'http://localhost:8080')
 - `SEQ_API_KEY` (required): Your Seq API key
 
+## seq-ops Skill
+
+This repo includes a Claude skill for Seq log analysis and incident investigation. Once the MCP server is connected, the skill guides Claude through structured investigations — health checks, incident triage, post-deployment monitoring — and produces consistent, actionable reports.
+
+**Install the skill:**
+```bash
+# From the releases page, download seq-ops.skill, then:
+claude skill install seq-ops.skill
+```
+
+Or install directly from this repo:
+```bash
+npx skills add ahmad2x4/mcp-server-seq
+```
+
+The skill automatically activates when you ask things like "morning health check", "something is broken in prod", "check the logs for timeouts", or "investigate the PPSR integration".
+
+---
+
 ## Usage with Claude Code
 
 Run the following command to add the server:

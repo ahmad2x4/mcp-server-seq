@@ -36,6 +36,16 @@ bower_components
 .lock-wscript
 
 # Compiled binary addons (https://nodejs.org/api/addons.html)
+# Skill eval workspaces and test outputs — contain business data, never commit
+skills/seq-ops-workspace/
+skills/seq-ops/evals/
+
+# Local MCP config for testing (contains credentials)
+.mcp.json
+
+# Packaged skill distribution file (built artifact)
+skills/*.skill
+
 build/Release
 
 # Dependency directories
