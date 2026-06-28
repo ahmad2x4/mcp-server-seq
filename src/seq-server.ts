@@ -45,10 +45,6 @@ const server = new McpServer({
 async function makeSeqRequest<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(`${SEQ_BASE_URL}${endpoint}`);
 
-  if (SEQ_API_KEY) {
-    url.searchParams.append('apiKey', SEQ_API_KEY);
-  }
-
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
       url.searchParams.append(key, value);

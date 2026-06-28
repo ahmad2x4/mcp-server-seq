@@ -5,10 +5,7 @@ const SEQ_API_KEY = process.env.SEQ_API_KEY || '';
 
 async function makeSeqRequest<T>(endpoint: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(`${SEQ_BASE_URL}${endpoint}`);
-  
-  // Add API key as query parameter
-  url.searchParams.append('apiKey', SEQ_API_KEY);
-  
+
   // Add additional query parameters
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
