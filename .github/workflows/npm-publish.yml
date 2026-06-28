@@ -43,5 +43,6 @@ jobs:
             npx --yes npm@11 version ${{ github.event.inputs.version }} --allow-same-version
           fi
           npx --yes npm@11 publish --provenance
+          git push --follow-tags
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
